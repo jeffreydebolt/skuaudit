@@ -3,6 +3,9 @@ import pandas as pd
 from datetime import datetime
 import os
 
+# Must be first Streamlit command
+st.set_page_config(page_title="SKUaudit", page_icon="📊", layout="wide")
+
 # Optional: Supabase for storing anonymized benchmark data
 try:
     from supabase import create_client, Client
@@ -170,8 +173,6 @@ def run_audit(results):
         
         st.markdown("---")
         st.caption("[hello@skuaudit.com](mailto:hello@skuaudit.com)")
-
-st.set_page_config(page_title="SKUaudit", page_icon="📊", layout="wide")
 
 st.title("📊 SKUaudit")
 st.subheader("Amazon FBA Margin Audit • Benchmarked Against Real Seller Data")
