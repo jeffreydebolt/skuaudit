@@ -230,7 +230,14 @@ def get_recommendation(row):
 
 # File upload
 st.markdown("### Step 1: Upload Fee Preview Report")
-st.caption("Download from Amazon Seller Central → Reports → Fulfillment → Fee Preview")
+
+with st.expander("How do I get this report?"):
+    st.markdown("""
+    1. [**Click here to open Fee Preview in Seller Central**](https://sellercentral.amazon.com/reportcentral/ESTIMATED_FBA_FEES/1)
+    2. Click **Request Download**
+    3. Wait for report to generate, then download the .txt file
+    4. Upload it here
+    """)
 
 uploaded_file = st.file_uploader("Upload Fee Preview (.txt or .csv)", type=['txt', 'csv'])
 
