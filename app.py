@@ -237,12 +237,35 @@ st.caption("Download from Amazon Seller Central → Reports → Fulfillment → 
 uploaded_file = st.file_uploader("Upload Fee Preview (.txt or .csv)", type=['txt', 'csv'])
 
 if uploaded_file is not None:
-    # Parse the file
-    try:
-        df = pd.read_csv(uploaded_file, sep='\t')
-    except:
-        uploaded_file.seek(0)
-        df = pd.read_csv(uploaded_file)
+    # Parse the file - handle different encodings
+    df = None
+    encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+    
+    # Try tab-separated first (most common for Amazon reports)
+    for encoding in encodings:
+        try:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, sep='\t', encoding=encoding, on_bad_lines='skip')
+            if not df.empty and len(df.columns) > 1:
+                break
+        except (UnicodeDecodeError, pd.errors.ParserError, Exception):
+            continue
+    
+    # If tab-separated failed, try comma-separated
+    if df is None or df.empty or len(df.columns) <= 1:
+        for encoding in encodings:
+            try:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=',', encoding=encoding, on_bad_lines='skip')
+                if not df.empty and len(df.columns) > 1:
+                    break
+            except (UnicodeDecodeError, pd.errors.ParserError, Exception):
+                continue
+    
+    if df is None or df.empty:
+        st.error("❌ Could not parse the file. Please ensure it's a valid Fee Preview report (.txt or .csv) downloaded from Amazon Seller Central.")
+        st.info("💡 **Tip:** Make sure you download the Fee Preview report directly from Seller Central (Reports → Fulfillment → Fee Preview) without opening it in Excel first.")
+        st.stop()
     
     # Extract relevant columns
     if 'sku' in df.columns and 'sales-price' in df.columns and 'expected-fulfillment-fee-per-unit' in df.columns:
