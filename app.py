@@ -60,12 +60,6 @@ def run_audit(results):
     
     st.markdown("---")
     
-    contribute_data = st.checkbox(
-        "Contribute anonymized data to improve benchmarks",
-        value=True,
-        help="No product names or identifiers stored. Just price tiers, fee percentages, and margins to help all sellers."
-    )
-    
     if st.button("🔍 Run Audit", type="primary", use_container_width=True):
         
         # Filter to only SKUs with costs entered
@@ -95,58 +89,48 @@ def run_audit(results):
         # Add recommendations
         results_with_costs['Recommendation'] = results_with_costs.apply(get_recommendation, axis=1)
         
-        # Save anonymized data if user opted in
-        if contribute_data:
-            save_anonymized_data(results_with_costs)
-        
         # Display results
         st.markdown("### 📊 Audit Results")
         
-        # Summary metrics
-        healthy = len(results_with_costs[results_with_costs['margin_pct'] >= MARGIN_MEDIAN])
-        warning = len(results_with_costs[(results_with_costs['margin_pct'] >= MARGIN_DANGER) & (results_with_costs['margin_pct'] < MARGIN_MEDIAN)])
-        danger = len(results_with_costs[results_with_costs['margin_pct'] < MARGIN_DANGER])
+        # Summary metrics - based on MARGIN (the bottom line)
+        above = len(results_with_costs[results_with_costs['margin_pct'] >= MARGIN_ELITE])
+        typical = len(results_with_costs[(results_with_costs['margin_pct'] >= MARGIN_DANGER) & (results_with_costs['margin_pct'] < MARGIN_ELITE)])
+        below = len(results_with_costs[results_with_costs['margin_pct'] < MARGIN_DANGER])
         
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total SKUs", len(results_with_costs))
-        col2.metric("🟢 Healthy", healthy)
-        col3.metric("🟡 Warning", warning)
-        col4.metric("🔴 Danger", danger)
+        col2.metric("🟢 Above Benchmark", above)
+        col3.metric("🟡 Typical", typical)
+        col4.metric("🔴 Below Benchmark", below)
         
         st.markdown("---")
         
-        # Detailed results table
-        display_df = results_with_costs[[
-            'SKU', 'Price', 'Landed Cost', 'Total Amazon Fees', 
-            'Fulfillment Status', 'fulfillment_pct',
-            'COGS Status', 'cogs_pct',
-            'Margin Status', 'margin', 'margin_pct'
-        ]].copy()
-        
-        display_df.columns = [
-            'SKU', 'Price', 'COGS', 'Amazon Fees',
-            'Fulfill', 'Fulfillment %',
-            'Cost', 'COGS %',
-            'Margin', 'Margin $', 'Margin %'
-        ]
-        
-        # Format numbers
-        display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
-        display_df['COGS'] = display_df['COGS'].apply(lambda x: f"${x:.2f}")
-        display_df['Amazon Fees'] = display_df['Amazon Fees'].apply(lambda x: f"${x:.2f}")
-        display_df['Fulfillment %'] = display_df['Fulfillment %'].apply(lambda x: f"{x:.1f}%")
-        display_df['COGS %'] = display_df['COGS %'].apply(lambda x: f"{x:.1f}%")
-        display_df['Margin $'] = display_df['Margin $'].apply(lambda x: f"${x:.2f}")
-        display_df['Margin %'] = display_df['Margin %'].apply(lambda x: f"{x:.1f}%")
+        # Detailed results table - clean with status indicators
+        display_df = pd.DataFrame({
+            'SKU': results_with_costs['SKU'],
+            'Price': results_with_costs['Price'].apply(lambda x: f"${x:.2f}"),
+            'Fulfillment %': results_with_costs.apply(lambda r: f"{r['Fulfillment Status']} {r['fulfillment_pct']:.1f}%", axis=1),
+            'COGS %': results_with_costs.apply(lambda r: f"{r['COGS Status']} {r['cogs_pct']:.1f}%", axis=1),
+            'Margin %': results_with_costs.apply(lambda r: f"{r['Margin Status']} {r['margin_pct']:.1f}%", axis=1),
+        })
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        # Download results
+        csv_results = display_df.to_csv(index=False)
+        st.download_button(
+            "📥 Download Results (CSV)",
+            csv_results,
+            "skuaudit_results.csv",
+            "text/csv"
+        )
         
         # Recommendations
         st.markdown("### 💡 Recommendations")
         
         for _, row in results_with_costs.iterrows():
-            if row['Recommendation'] != "✓ Healthy":
-                st.warning(f"**{row['SKU']}**: {row['Recommendation']}")
+            if row['Recommendation'] != "✓ Solid margins":
+                st.info(f"**{row['SKU']}**: {row['Recommendation']}")
             else:
                 st.success(f"**{row['SKU']}**: {row['Recommendation']}")
         
@@ -155,21 +139,33 @@ def run_audit(results):
             st.markdown("""
             **Fulfillment % of Price:**
             - 🟢 15% or less - Elite (Top 10%)
-            - 🟡 16-22% - Median performer
-            - 🔴 30%+ - Danger zone
+            - 🟡 16-22% - Typical
+            - 🔴 30%+ - Above typical
             
             **COGS % of Price:**
             - 🟢 19% or less - Elite (Top 10%)
-            - 🟡 20-27% - Median performer
-            - 🔴 33%+ - Danger zone
+            - 🟡 20-27% - Typical
+            - 🔴 33%+ - Above typical
             
             **Gross Margin %:**
-            - 🟢 43%+ - Elite performer
-            - 🟡 34-42% - Median performer
-            - 🔴 Under 28% - Danger zone
+            - 🟢 43%+ - Elite
+            - 🟡 28-42% - Typical
+            - 🔴 Under 28% - Below typical
             
-            *Based on real data from 7-figure Amazon sellers. Amazon takes ~1 margin point from sellers per year.*
+            *Based on real data from 7-figure Amazon sellers. These are benchmarks, not rules — your business context matters.*
             """)
+        
+        # Data contribution checkbox - after results
+        st.markdown("---")
+        contribute_data = st.checkbox(
+            "✓ Contribute my anonymized data to improve benchmarks",
+            value=True,
+            help="No product names or identifiers stored. Just price tiers, fee percentages, and margins."
+        )
+        
+        if contribute_data:
+            save_anonymized_data(results_with_costs)
+            st.caption("Thanks! Your anonymous data helps improve benchmarks for all sellers.")
         
         st.markdown("---")
         st.caption("[hello@skuaudit.com](mailto:hello@skuaudit.com)")
@@ -196,19 +192,21 @@ MARGIN_DANGER = 28          # Below this is trouble
 FREE_SKU_LIMIT = 10         # Free tier limit
 
 
-def get_status(value, excellent, good, danger, higher_is_better=True):
+def get_status(value, elite, median, danger, higher_is_better=True):
     """Return emoji status based on thresholds"""
     if higher_is_better:
-        if value >= excellent:
+        # For margin: higher is better
+        if value >= elite:
             return "🟢"
-        elif value >= good:
+        elif value >= danger:
             return "🟡"
         else:
             return "🔴"
-    else:  # lower is better (like fulfillment %, COGS %)
-        if value <= excellent:
+    else:
+        # For costs: lower is better
+        if value <= elite:
             return "🟢"
-        elif value <= good:
+        elif value < danger:
             return "🟡"
         else:
             return "🔴"
@@ -219,15 +217,15 @@ def get_recommendation(row):
     recs = []
     
     if row['fulfillment_pct'] >= FULFILLMENT_DANGER:
-        recs.append(f"⚠️ Fulfillment at {row['fulfillment_pct']:.1f}% (benchmark: {FULFILLMENT_MEDIAN}%) - check dimensions, consider smaller packaging, or raise price")
+        recs.append(f"Fulfillment {row['fulfillment_pct']:.1f}% (typical: {FULFILLMENT_MEDIAN}%) - check dimensions, packaging, or pricing")
     
     if row['cogs_pct'] >= COGS_DANGER:
-        recs.append(f"⚠️ COGS at {row['cogs_pct']:.1f}% (benchmark: {COGS_MEDIAN}%) - negotiate supplier, find alternative, or raise price")
+        recs.append(f"COGS {row['cogs_pct']:.1f}% (typical: {COGS_MEDIAN}%) - review supplier costs or pricing")
     
     if row['margin_pct'] < MARGIN_DANGER:
-        recs.append(f"🚨 Margin at {row['margin_pct']:.1f}% (benchmark: {MARGIN_MEDIAN}%) - this SKU may not be viable")
+        recs.append(f"Margin {row['margin_pct']:.1f}% below benchmark ({MARGIN_MEDIAN}%) - review unit economics")
     
-    return " | ".join(recs) if recs else "✓ Healthy"
+    return " | ".join(recs) if recs else "✓ Solid margins"
 
 
 # File upload
@@ -237,35 +235,24 @@ st.caption("Download from Amazon Seller Central → Reports → Fulfillment → 
 uploaded_file = st.file_uploader("Upload Fee Preview (.txt or .csv)", type=['txt', 'csv'])
 
 if uploaded_file is not None:
-    # Parse the file - handle different encodings
-    df = None
-    encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
-    
-    # Try tab-separated first (most common for Amazon reports)
-    for encoding in encodings:
+    # Parse the file - handle various encodings
+    try:
+        df = pd.read_csv(uploaded_file, sep='\t', encoding='utf-8')
+    except:
         try:
             uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, sep='\t', encoding=encoding, on_bad_lines='skip')
-            if not df.empty and len(df.columns) > 1:
-                break
-        except (UnicodeDecodeError, pd.errors.ParserError, Exception):
-            continue
-    
-    # If tab-separated failed, try comma-separated
-    if df is None or df.empty or len(df.columns) <= 1:
-        for encoding in encodings:
+            df = pd.read_csv(uploaded_file, sep='\t', encoding='latin-1')
+        except:
             try:
                 uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=',', encoding=encoding, on_bad_lines='skip')
-                if not df.empty and len(df.columns) > 1:
-                    break
-            except (UnicodeDecodeError, pd.errors.ParserError, Exception):
-                continue
-    
-    if df is None or df.empty:
-        st.error("❌ Could not parse the file. Please ensure it's a valid Fee Preview report (.txt or .csv) downloaded from Amazon Seller Central.")
-        st.info("💡 **Tip:** Make sure you download the Fee Preview report directly from Seller Central (Reports → Fulfillment → Fee Preview) without opening it in Excel first.")
-        st.stop()
+                df = pd.read_csv(uploaded_file, encoding='utf-8')
+            except:
+                try:
+                    uploaded_file.seek(0)
+                    df = pd.read_csv(uploaded_file, encoding='latin-1')
+                except Exception as e:
+                    st.error(f"Could not read file. Try saving as UTF-8 CSV first.")
+                    st.stop()
     
     # Extract relevant columns
     if 'sku' in df.columns and 'sales-price' in df.columns and 'expected-fulfillment-fee-per-unit' in df.columns:
