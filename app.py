@@ -125,9 +125,9 @@ def run_audit(results):
         
         display_df.columns = [
             'SKU', 'Price', 'COGS', 'Amazon Fees',
-            '', 'Fulfillment %',
-            '', 'COGS %',
-            '', 'Margin $', 'Margin %'
+            'Fulfill', 'Fulfillment %',
+            'Cost', 'COGS %',
+            'Margin', 'Margin $', 'Margin %'
         ]
         
         # Format numbers
