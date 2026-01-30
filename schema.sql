@@ -43,3 +43,30 @@ CREATE POLICY "Allow authenticated reads" ON benchmark_data
 
 -- Daily submission count (for tracking growth)
 -- SELECT DATE(created_at), COUNT(*) FROM benchmark_data GROUP BY DATE(created_at) ORDER BY DATE(created_at) DESC;
+
+
+-- ============================================
+-- Leads table for email capture (v2)
+-- ============================================
+
+CREATE TABLE leads (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email TEXT NOT NULL,
+    first_name TEXT,
+    brand_name TEXT,
+    sku_count INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_leads_email ON leads(email);
+CREATE INDEX idx_leads_created_at ON leads(created_at);
+
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anonymous inserts" ON leads
+    FOR INSERT TO anon
+    WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated reads" ON leads
+    FOR SELECT TO authenticated
+    USING (true);
