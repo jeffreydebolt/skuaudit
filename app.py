@@ -455,7 +455,7 @@ if uploaded_file is not None:
                 sku: (sku not in flagged_skus) for sku in results['SKU']
             }
 
-        # Search filter
+        # Search filter (outside form so it filters live)
         search_term = st.text_input("🔍 Search SKUs", placeholder="Type to filter by SKU or product name...")
 
         # Select All / Deselect All — update session state and force fresh widget
@@ -487,23 +487,26 @@ if uploaded_file is not None:
         else:
             display_selection = selection_df.copy()
 
-        # Editable selection table
-        edited_selection = st.data_editor(
-            display_selection,
-            column_config={
-                "Select": st.column_config.CheckboxColumn("Select", default=True),
-                "SKU": st.column_config.TextColumn("SKU", disabled=True),
-                "Product": st.column_config.TextColumn("Product", disabled=True, width="medium"),
-                "Price": st.column_config.NumberColumn("Price", disabled=True, format="$%.2f"),
-            },
-            hide_index=True,
-            use_container_width=True,
-            key=f"sku_selector_{st.session_state.sku_selector_version}"
-        )
+        # SKU selection form — checkboxes don't trigger reruns until "Confirm"
+        with st.form(f"sku_selection_form_{st.session_state.sku_selector_version}"):
+            edited_selection = st.data_editor(
+                display_selection,
+                column_config={
+                    "Select": st.column_config.CheckboxColumn("Select", default=True),
+                    "SKU": st.column_config.TextColumn("SKU", disabled=True),
+                    "Product": st.column_config.TextColumn("Product", disabled=True, width="medium"),
+                    "Price": st.column_config.NumberColumn("Price", disabled=True, format="$%.2f"),
+                },
+                hide_index=True,
+                use_container_width=True,
+            )
+            confirmed = st.form_submit_button("✅ Confirm Selection", type="primary", use_container_width=True)
 
-        # Write edits back to session state
-        for _, row in edited_selection.iterrows():
-            st.session_state.sku_selections[row['SKU']] = bool(row['Select'])
+        if confirmed:
+            # Write edits back to session state
+            for _, row in edited_selection.iterrows():
+                st.session_state.sku_selections[row['SKU']] = bool(row['Select'])
+            st.rerun()
 
         # Get selected SKUs from session state (full list, not just displayed)
         selected_skus = [sku for sku in results['SKU'] if st.session_state.sku_selections.get(sku, False)]
