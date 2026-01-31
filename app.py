@@ -40,6 +40,8 @@ if 'audit_triggered' not in st.session_state:
     st.session_state.audit_triggered = False
 if 'sku_selections' not in st.session_state:
     st.session_state.sku_selections = {}
+if 'sku_selector_version' not in st.session_state:
+    st.session_state.sku_selector_version = 0
 
 
 def save_anonymized_data(results_df):
@@ -401,6 +403,7 @@ if uploaded_file is not None:
         st.session_state.lead_email = ""
         st.session_state.audit_triggered = False
         st.session_state.sku_selections = {}
+        st.session_state.sku_selector_version = 0
 
     # Parse the file - handle various encodings
     try:
@@ -455,15 +458,17 @@ if uploaded_file is not None:
         # Search filter
         search_term = st.text_input("🔍 Search SKUs", placeholder="Type to filter by SKU or product name...")
 
-        # Select All / Deselect All — update session state and rerun
+        # Select All / Deselect All — update session state and force fresh widget
         col_a, col_b, col_c = st.columns([1, 1, 4])
         if col_a.button("Select All"):
             for sku in results['SKU']:
                 st.session_state.sku_selections[sku] = True
+            st.session_state.sku_selector_version += 1
             st.rerun()
         if col_b.button("Deselect All"):
             for sku in results['SKU']:
                 st.session_state.sku_selections[sku] = False
+            st.session_state.sku_selector_version += 1
             st.rerun()
 
         # Build selection dataframe from session state
@@ -493,7 +498,7 @@ if uploaded_file is not None:
             },
             hide_index=True,
             use_container_width=True,
-            key="sku_selector"
+            key=f"sku_selector_{st.session_state.sku_selector_version}"
         )
 
         # Write edits back to session state
