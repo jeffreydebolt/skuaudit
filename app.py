@@ -38,6 +38,8 @@ if 'last_upload_name' not in st.session_state:
     st.session_state.last_upload_name = ""
 if 'audit_triggered' not in st.session_state:
     st.session_state.audit_triggered = False
+if 'sku_selections' not in st.session_state:
+    st.session_state.sku_selections = {}
 
 
 def save_anonymized_data(results_df):
@@ -398,6 +400,7 @@ if uploaded_file is not None:
         st.session_state.email_submitted = False
         st.session_state.lead_email = ""
         st.session_state.audit_triggered = False
+        st.session_state.sku_selections = {}
 
     # Parse the file - handle various encodings
     try:
@@ -443,14 +446,31 @@ if uploaded_file is not None:
         if flagged_skus:
             st.warning(f"Auto-flagged {len(flagged_skus)} suspected junk/duplicate SKUs (deselected by default). Review below.")
 
+        # Initialize selections on first load (all selected except flagged)
+        if not st.session_state.sku_selections:
+            st.session_state.sku_selections = {
+                sku: (sku not in flagged_skus) for sku in results['SKU']
+            }
+
         # Search filter
         search_term = st.text_input("🔍 Search SKUs", placeholder="Type to filter by SKU or product name...")
 
-        # Build selection dataframe
+        # Select All / Deselect All — update session state and rerun
+        col_a, col_b, col_c = st.columns([1, 1, 4])
+        if col_a.button("Select All"):
+            for sku in results['SKU']:
+                st.session_state.sku_selections[sku] = True
+            st.rerun()
+        if col_b.button("Deselect All"):
+            for sku in results['SKU']:
+                st.session_state.sku_selections[sku] = False
+            st.rerun()
+
+        # Build selection dataframe from session state
         selection_df = results[['SKU', 'Product', 'Price']].copy()
-        selection_df.insert(0, 'Select', True)
-        # Pre-deselect flagged SKUs
-        selection_df.loc[selection_df['SKU'].isin(flagged_skus), 'Select'] = False
+        selection_df.insert(0, 'Select', selection_df['SKU'].map(
+            lambda s: st.session_state.sku_selections.get(s, True)
+        ))
 
         # Apply search filter for display
         if search_term:
@@ -461,27 +481,6 @@ if uploaded_file is not None:
             display_selection = selection_df[mask].copy()
         else:
             display_selection = selection_df.copy()
-
-        # Select All / Deselect All
-        col_a, col_b, col_c = st.columns([1, 1, 4])
-        if col_a.button("Select All"):
-            selection_df['Select'] = True
-            display_selection = selection_df.copy()
-            if search_term:
-                mask = (
-                    selection_df['SKU'].str.contains(search_term, case=False, na=False) |
-                    selection_df['Product'].str.contains(search_term, case=False, na=False)
-                )
-                display_selection = selection_df[mask].copy()
-        if col_b.button("Deselect All"):
-            selection_df['Select'] = False
-            display_selection = selection_df.copy()
-            if search_term:
-                mask = (
-                    selection_df['SKU'].str.contains(search_term, case=False, na=False) |
-                    selection_df['Product'].str.contains(search_term, case=False, na=False)
-                )
-                display_selection = selection_df[mask].copy()
 
         # Editable selection table
         edited_selection = st.data_editor(
@@ -497,9 +496,12 @@ if uploaded_file is not None:
             key="sku_selector"
         )
 
-        # Get selected SKUs
-        selected_mask = edited_selection['Select'] == True
-        selected_skus = edited_selection.loc[selected_mask, 'SKU'].tolist()
+        # Write edits back to session state
+        for _, row in edited_selection.iterrows():
+            st.session_state.sku_selections[row['SKU']] = bool(row['Select'])
+
+        # Get selected SKUs from session state (full list, not just displayed)
+        selected_skus = [sku for sku in results['SKU'] if st.session_state.sku_selections.get(sku, False)]
         selected_count = len(selected_skus)
         total_count = len(results)
 
